@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Power Usage Forecasting Tool{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-indigo-50">
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-blue-600 to-indigo-600 shadow-sm border-b border-blue-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="{{ url_for('index') }}" class="flex items-center text-xl font-bold text-white hover:text-yellow-200 transition-colors duration-200">
+                        <i class="fas fa-bolt text-yellow-300 mr-2"></i>
+                        Power Forecast
+                    </a>
+                </div>
+                
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="{{ url_for('index') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        <i class="fas fa-home mr-1"></i>Home
+                    </a>
+                    
+                    {% if session.get('user_id') %}
+                        <a href="{{ url_for('dashboard') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            <i class="fas fa-tachometer-alt mr-1"></i>Dashboard
+                        </a>
+                        <a href="{{ url_for('forecast') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            <i class="fas fa-chart-line mr-1"></i>Forecast
+                        </a>
+                        <a href="{{ url_for('optimization') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            <i class="fas fa-lightbulb mr-1"></i>Optimization
+                        </a>
+                        <!-- Settings Dropdown -->
+                        <div class="relative">
+                            <button class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center" onclick="toggleDropdown()">
+                                <i class="fas fa-cog mr-1"></i>Settings
+                                <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                            </button>
+                            <div id="settingsDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                                <a href="{{ url_for('settings') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150">
+                                    <i class="fas fa-sliders-h mr-2"></i>Preferences
+                                </a>
+                                <hr class="my-1 border-gray-200">
+                                <a href="#" onclick="exportData()" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150">
+                                    <i class="fas fa-download mr-2"></i>Export Data
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <!-- User Menu -->
+                        <div class="relative">
+                            <button class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center" onclick="toggleUserDropdown()">
+                                <i class="fas fa-user mr-1"></i>{{ session.get('username', 'User') }}
+                                <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                            </button>
+                            <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                                <a href="{{ url_for('profile') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150">
+                                    <i class="fas fa-user-circle mr-2"></i>Profile
+                                </a>
+                                <hr class="my-1 border-gray-200">
+                                <a href="{{ url_for('logout') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            <i class="fas fa-sign-in-alt mr-1"></i>Login
+                        </a>
+                        <a href="{{ url_for('signup') }}" class="text-white hover:text-yellow-200 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            <i class="fas fa-user-plus mr-1"></i>Sign Up
+                        </a>
+                    {% endif %}
+                </div>
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button onclick="toggleMobileMenu()" class="text-white hover:text-yellow-200 p-2 rounded-md">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Mobile menu -->
+            <div id="mobileMenu" class="hidden md:hidden pb-4">
+                <div class="space-y-1">
+                    <a href="{{ url_for('index') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                        <i class="fas fa-home mr-2"></i>Home
+                    </a>
+                    
+                    {% if session.get('user_id') %}
+                        <a href="{{ url_for('dashboard') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                        </a>
+                        <a href="{{ url_for('forecast') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-chart-line mr-2"></i>Forecast
+                        </a>
+                        <a href="{{ url_for('optimization') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-lightbulb mr-2"></i>Optimization
+                        </a>
+                        <hr class="border-blue-200 my-2">
+                        <a href="{{ url_for('settings') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-sliders-h mr-2"></i>Preferences
+                        </a>
+                        <a href="#" onclick="exportData()" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-download mr-2"></i>Export Data
+                        </a>
+                        <hr class="border-blue-200 my-2">
+                        <a href="{{ url_for('profile') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-user-circle mr-2"></i>Profile
+                        </a>
+                        <a href="{{ url_for('logout') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </a>
+                    {% else %}
+                        <hr class="border-blue-200 my-2">
+                        <a href="{{ url_for('login') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-sign-in-alt mr-2"></i>Login
+                        </a>
+                        <a href="{{ url_for('signup') }}" class="block text-white hover:text-yellow-200 px-3 py-2 rounded-md text-base font-medium">
+                            <i class="fas fa-user-plus mr-2"></i>Sign Up
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} flex items-center justify-between" role="alert">
+                        <div class="flex items-center">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle mr-2"></i>
+                            {% elif category == 'error' or category == 'danger' %}
+                                <i class="fas fa-exclamation-circle mr-2"></i>
+                            {% elif category == 'warning' %}
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle mr-2"></i>
+                            {% endif %}
+                            {{ message }}
+                        </div>
+                        <button type="button" class="text-gray-400 hover:text-gray-600" onclick="this.parentElement.remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gradient-to-r from-blue-100 to-blue-200 border-t border-blue-200 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h6 class="text-lg font-semibold text-blue-900 mb-2">Power Usage Forecasting Tool</h6>
+                    <p class="text-blue-700">Intelligent power consumption analysis and optimization</p>
+                </div>
+                <div class="text-right md:text-left">
+                    <p class="text-blue-700">
+                        <i class="fas fa-leaf text-green-600 mr-1"></i>
+                        Save energy, save money, save the planet
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom JS -->
+    <!-- Temporarily disabled main.js to fix upload form conflict -->
+    <!-- <script src="{{ url_for('static', filename='js/main.js') }}"></script> -->
+    
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Dropdown toggle
+        function toggleDropdown() {
+            const dropdown = document.getElementById('settingsDropdown');
+            dropdown.classList.toggle('hidden');
+        }
+        
+        // User dropdown toggle
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            dropdown.classList.toggle('hidden');
+        }
+        
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('hidden');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('settingsDropdown');
+            const button = event.target.closest('button');
+            
+            if (!button || !button.onclick || button.onclick.toString().includes('toggleDropdown')) {
+                return;
+            }
+            
+            if (!dropdown.contains(event.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+        
+        // Export data function
+        function exportData() {
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+            
+            const endDate = new Date();
+            
+            const url = `/api/export_data?start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`;
+            
+            fetch(url)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `power_usage_${new Date().toISOString().split('T')[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                })
+                .catch(error => {
+                    console.error('Error exporting data:', error);
+                    alert('Error exporting data. Please try again.');
+                });
+        }
+        
+        // Auto-refresh dashboard every 5 minutes (disabled during upload)
+        const isDashboard = '{{ request.endpoint }}' === 'dashboard';
+        if (isDashboard) {
+            // Only auto-refresh if no upload is in progress
+            let uploadInProgress = false;
+            document.addEventListener('uploadStart', () => { uploadInProgress = true; });
+            document.addEventListener('uploadEnd', () => { uploadInProgress = false; });
+            
+            setInterval(function() {
+                if (!uploadInProgress) {
+                    location.reload();
+                }
+            }, 300000); // 5 minutes
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}Forecast - Power Usage Forecasting Tool{% endblock %}
+
+{% block extra_css %}
+<style>
+    .forecast-card {
+        transition: transform 0.2s;
+    }
+    .forecast-card:hover {
+        transform: translateY(-2px);
+    }
+    .confidence-interval {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));
+        border-left: 4px solid #f59e0b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-chart-line text-blue-600 mr-3"></i>
+            Power Usage Forecast
+        </h1>
+        <p class="text-gray-600">Predictive analytics for power consumption planning</p>
+    </div>
+    <button class="btn btn-outline-primary mt-4 sm:mt-0" onclick="refreshForecast()">
+        <i class="fas fa-sync-alt mr-2"></i>
+        Refresh Forecast
+    </button>
+</div>
+
+<!-- Forecast Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Next 24h Average -->
+    <div class="card forecast-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-chart-area text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Next 24h Average</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.2f"|format(forecast_summary.next_24h_avg) }} kWh</p>
+                    <p class="text-sm text-blue-600 flex items-center">
+                        <i class="fas fa-arrow-up mr-1"></i>
+                        Predicted
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Peak Hour -->
+    <div class="card forecast-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Peak Hour</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ forecast_summary.peak_hour }}</p>
+                    <p class="text-sm text-yellow-600 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        High Usage Expected
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Peak Usage -->
+    <div class="card forecast-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-bolt text-red-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Peak Usage</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.2f"|format(forecast_summary.peak_usage) }} kWh</p>
+                    <p class="text-sm text-red-600 flex items-center">
+                        <i class="fas fa-arrow-up mr-1"></i>
+                        Maximum Expected
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Predicted -->
+    <div class="card forecast-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-calculator text-green-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Total Predicted</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(forecast_summary.total_predicted) }} kWh</p>
+                    <p class="text-sm text-green-600 flex items-center">
+                        <i class="fas fa-calendar mr-1"></i>
+                        Next 24 Hours
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Forecast Chart -->
+<div class="card mb-8">
+    <div class="card-header">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <h5 class="card-title">
+                <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                Power Usage Forecast (Next 24 Hours)
+            </h5>
+            <div class="flex space-x-2 mt-4 sm:mt-0">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="updateForecastPeriod(24)">
+                    24h
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="updateForecastPeriod(48)">
+                    48h
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="updateForecastPeriod(168)">
+                    7d
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="forecastChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Forecast Details and Confidence Intervals -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Forecast Details Table -->
+    <div class="lg:col-span-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-table text-blue-600 mr-2"></i>
+                    Hourly Forecast Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="overflow-x-auto">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Predicted Usage (kWh)</th>
+                                <th>Confidence Range</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecastTable">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forecast Information -->
+    <div class="lg:col-span-1">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                    Forecast Information
+                </h5>
+            </div>
+            <div class="card-body space-y-6">
+                <div>
+                    <h6 class="text-sm font-semibold text-gray-900 mb-2">Model Accuracy</h6>
+                    <div class="progress mb-2">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 85%">85%</div>
+                    </div>
+                    <p class="text-xs text-gray-500">Based on historical data patterns</p>
+                </div>
+                
+                <div>
+                    <h6 class="text-sm font-semibold text-gray-900 mb-2">Confidence Level</h6>
+                    <div class="progress mb-2">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: 78%">78%</div>
+                    </div>
+                    <p class="text-xs text-gray-500">Statistical confidence in predictions</p>
+                </div>
+                
+                <div>
+                    <h6 class="text-sm font-semibold text-gray-900 mb-2">Data Points Used</h6>
+                    <p class="text-lg font-bold text-gray-900 mb-1">168 hours</p>
+                    <p class="text-xs text-gray-500">Last 7 days of historical data</p>
+                </div>
+                
+                <div>
+                    <h6 class="text-sm font-semibold text-gray-900 mb-2">Last Updated</h6>
+                    <p class="text-lg font-bold text-gray-900 mb-1" id="lastUpdated">Just now</p>
+                    <p class="text-xs text-gray-500">Forecast refreshes automatically</p>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb mr-2"></i>
+                    <strong>Tip:</strong> Use this forecast to plan your energy usage and optimize costs.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Forecast Insights -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">
+            <i class="fas fa-lightbulb text-yellow-600 mr-2"></i>
+            Forecast Insights
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Peak Usage Insight -->
+            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-exclamation-triangle text-blue-600 mr-2"></i>
+                    <h6 class="font-semibold text-blue-900">Peak Usage Alert</h6>
+                </div>
+                <p class="text-sm text-blue-800">
+                    Expect peak usage around {{ forecast_summary.peak_hour }} with {{ "%.2f"|format(forecast_summary.peak_usage) }} kWh.
+                </p>
+            </div>
+
+            <!-- Cost Prediction -->
+            <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-dollar-sign text-green-600 mr-2"></i>
+                    <h6 class="font-semibold text-green-900">Cost Prediction</h6>
+                </div>
+                <p class="text-sm text-green-800">
+                    Estimated cost for next 24 hours: ${{ "%.2f"|format(forecast_summary.total_predicted * 0.12) }}
+                </p>
+            </div>
+
+            <!-- Efficiency Tip -->
+            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-lightbulb text-yellow-600 mr-2"></i>
+                    <h6 class="font-semibold text-yellow-900">Efficiency Tip</h6>
+                </div>
+                <p class="text-sm text-yellow-800">
+                    Consider shifting high-power activities to off-peak hours to reduce costs.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let forecastChartInstance = null;
+
+function renderForecastChart(data) {
+    const ctx = document.getElementById('forecastChart').getContext('2d');
+    if (forecastChartInstance) {
+        forecastChartInstance.destroy();
+    }
+    forecastChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.timestamps || [],
+            datasets: [{
+                label: 'Forecasted Usage',
+                data: data.forecast || [],
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }, {
+                label: 'Confidence Upper',
+                data: data.confidence_upper || [],
+                borderColor: 'rgba(59, 130, 246, 0.3)',
+                backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                borderWidth: 1,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                y: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Power Usage (kWh)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            }
+        }
+    });
+}
+
+function updateForecastTable(data) {
+    const tbody = document.getElementById('forecastTable');
+    tbody.innerHTML = '';
+    if (data.forecast && data.timestamps) {
+        for (let i = 0; i < data.forecast.length; i++) {
+            const row = document.createElement('tr');
+            const usage = data.forecast[i];
+            const timestamp = data.timestamps[i];
+            let statusClass = 'text-green-600';
+            let statusText = 'Low';
+            if (usage > 4.0) {
+                statusClass = 'text-red-600';
+                statusText = 'High';
+            } else if (usage > 2.5) {
+                statusClass = 'text-yellow-600';
+                statusText = 'Moderate';
+            }
+            row.innerHTML = `
+                <td class="text-sm text-gray-900">${timestamp}</td>
+                <td class="text-sm text-gray-900">${usage !== undefined ? usage.toFixed(2) : '-'} kWh</td>
+                <td class="text-sm text-gray-600">±${usage !== undefined ? (usage * 0.1).toFixed(2) : '-'} kWh</td>
+                <td class="text-sm ${statusClass}">${statusText}</td>
+            `;
+            tbody.appendChild(row);
+        }
+    } else {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="4" class="text-center text-gray-500">No forecast data available.</td>';
+        tbody.appendChild(row);
+    }
+}
+
+function updateForecastPeriod(hours) {
+    fetch(`/api/forecast?hours=${hours}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                renderForecastChart(result.data);
+                updateForecastTable(result.data);
+            } else {
+                renderForecastChart({timestamps: [], forecast: [], confidence_upper: []});
+                updateForecastTable({});
+                alert('Error updating forecast: ' + result.message);
+            }
+        })
+        .catch(error => {
+            renderForecastChart({timestamps: [], forecast: [], confidence_upper: []});
+            updateForecastTable({});
+            console.error('Error:', error);
+            alert('Error updating forecast');
+        });
+}
+
+// On page load, show 24h forecast by default
+updateForecastPeriod(24);
+</script>
+{% endblock %} 

@@ -1,0 +1,1242 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Power Usage Forecasting Tool{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    /* Remove @apply and use plain CSS for status indicators */
+    .status-indicator {
+        display: inline-block;
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 9999px;
+        margin-right: 0.5rem;
+    }
+    .status-normal { background-color: #10b981; }
+    .status-warning { background-color: #f59e0b; }
+    .status-critical { background-color: #ef4444; }
+    
+    /* Chart container styles */
+    .chart-container {
+        position: relative;
+        height: 400px;
+        width: 100%;
+    }
+    
+    /* Empty chart state styles */
+    .empty-chart-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 400px;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 8px;
+        border: 2px dashed #cbd5e1;
+    }
+    
+    .empty-chart-state:hover {
+        border-color: #94a3b8;
+        background: linear-gradient(135deg, #f1f5f9 0%, #dbeafe 100%);
+    }
+    
+    /* Notification styles */
+    .notification {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    /* Chart refresh button */
+    .chart-refresh-btn {
+        transition: transform 0.2s ease;
+    }
+    
+    .chart-refresh-btn:hover {
+        transform: rotate(180deg);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-tachometer-alt text-blue-600 mr-3"></i>
+            Dashboard
+        </h1>
+        <p class="text-gray-600">Real-time power usage monitoring and analytics</p>
+    </div>
+    <button class="btn btn-outline-primary mt-4 sm:mt-0" onclick="refreshDashboardData()">
+        <i class="fas fa-sync-alt mr-2"></i>
+        Refresh Data
+    </button>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Current Usage -->
+    <div class="card stat-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-bolt text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Current Usage</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.2f"|format(current_usage) }} kWh</p>
+                    <p class="text-sm text-green-600 flex items-center">
+                        <i class="fas fa-arrow-up mr-1"></i>
+                        Live data
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Average Usage -->
+    <div class="card stat-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-chart-line text-green-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Average Usage</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.2f"|format(avg_usage) }} kWh</p>
+                    <p class="text-sm text-gray-500 flex items-center">
+                        <i class="fas fa-clock mr-1"></i>
+                        Last 7 days
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Usage -->
+    <div class="card stat-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-calculator text-yellow-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Total Usage</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ "%.1f"|format(total_usage) }} kWh</p>
+                    <p class="text-sm text-gray-500 flex items-center">
+                        <i class="fas fa-calendar mr-1"></i>
+                        Last 7 days
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estimated Cost -->
+    <div class="card stat-card hover-lift">
+        <div class="p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-dollar-sign text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <p class="text-sm font-medium text-gray-600 mb-1">Estimated Cost</p>
+                    <p class="text-2xl font-bold text-gray-900">${{ "%.2f"|format(total_usage * 0.12) }}</p>
+                    <p class="text-sm text-gray-500 flex items-center">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        @ $0.12/kWh
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New User Help Message -->
+{% if current_usage == 0 and avg_usage == 0 and total_usage == 0 %}
+<div class="mb-6">
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <i class="fas fa-info-circle text-blue-600 text-lg"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Welcome to Power Forecast!</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <p>You're starting fresh with no power usage data. To see how the system works:</p>
+                    <ul class="mt-1 ml-4 list-disc">
+                        <li>Click "Generate Sample Data" to create demo data</li>
+                        <li>Upload your own CSV/Excel files with power usage data</li>
+                        <li>Explore the forecasting and optimization features</li>
+                    </ul>
+                </div>
+                <div class="mt-3">
+                    <button onclick="generateSampleData()" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-magic mr-2"></i>
+                        Generate Sample Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts Row -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Usage Chart -->
+    <div class="lg:col-span-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-chart-area text-blue-600 mr-2"></i>
+                    Power Usage Over Time
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if chart_data.timestamps|length > 0 %}
+                    <div class="chart-container">
+                        <canvas id="usageChart"></canvas>
+                    </div>
+                {% else %}
+                    <div class="flex items-center justify-center h-64 text-gray-500">
+                        <div class="text-center">
+                            <i class="fas fa-chart-area text-6xl mb-4 text-gray-300"></i>
+                            <p class="text-lg font-medium text-gray-400">No data available</p>
+                            <p class="text-sm text-gray-400 mb-4">Upload data or generate sample data to see charts</p>
+                            <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                                <i class="fas fa-magic mr-2"></i>
+                                Generate Sample Data
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Distribution -->
+    <div class="lg:col-span-1">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-pie-chart text-green-600 mr-2"></i>
+                    Usage Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if chart_data.timestamps|length > 0 %}
+                    <div class="chart-container">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                {% else %}
+                    <div class="flex items-center justify-center h-64 text-gray-500">
+                        <div class="text-center">
+                            <i class="fas fa-pie-chart text-6xl mb-4 text-gray-300"></i>
+                            <p class="text-lg font-medium text-gray-400">No data available</p>
+                            <p class="text-sm text-gray-400 mb-4">Upload data or generate sample data to see charts</p>
+                            <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                                <i class="fas fa-magic mr-2"></i>
+                                Generate Sample Data
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Upload and Quick Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Upload Data -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="fas fa-upload text-blue-600 mr-2"></i>
+                Upload Data
+            </h5>
+        </div>
+        <div class="card-body">
+            <form id="uploadForm" action="{{ url_for('upload_data') }}" method="post" enctype="multipart/form-data" onsubmit="return handleUpload(event)">
+                <div class="mb-4">
+                    <label for="file" class="form-label">Upload CSV file with power usage data</label>
+                    <input type="file" class="form-control" id="file" name="file" accept=".csv,.xlsx,.xls" required>
+                    <p class="form-text">
+                        File should contain columns: timestamp, usage, temperature (optional)
+                    </p>
+                </div>
+                <button type="submit" class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload mr-2"></i>
+                    Upload Data
+                </button>
+            </form>
+            <div id="uploadStatus" class="mt-3" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="fas fa-rocket text-green-600 mr-2"></i>
+                Quick Actions
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="space-y-3">
+                <a href="{{ url_for('forecast') }}" class="btn btn-outline-primary w-full">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    View Forecast
+                </a>
+                <a href="{{ url_for('optimization') }}" class="btn btn-outline-success w-full">
+                    <i class="fas fa-lightbulb mr-2"></i>
+                    Get Optimization Suggestions
+                </a>
+                <button class="btn btn-outline-warning w-full" onclick="generateSampleData()">
+                    <i class="fas fa-database mr-2"></i>
+                    Generate Sample Data
+                </button>
+                <button class="btn btn-outline-info w-full" onclick="debugData()">
+                    <i class="fas fa-bug mr-2"></i>
+                    Debug Data
+                </button>
+                <button class="btn btn-outline-danger w-full" onclick="clearAllData()">
+                    <i class="fas fa-trash-alt mr-2"></i>
+                    Clear All Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">
+            <i class="fas fa-history text-purple-600 mr-2"></i>
+            Recent Activity
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Usage</th>
+                        <th>Temperature</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recentActivity">
+                    <!-- Data will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Get chart data from Flask template
+const chartData = {{ chart_data | tojson | safe }};
+
+// Chart instances for cleanup
+let usageChart = null;
+let distributionChart = null;
+
+// Function to create usage chart
+function createUsageChart() {
+    const usageCtx = document.getElementById('usageChart');
+    if (!usageCtx) {
+        console.log('Usage chart canvas not found');
+        return;
+    }
+    
+    // Destroy existing chart if it exists
+    if (usageChart) {
+        usageChart.destroy();
+    }
+    
+    try {
+        usageChart = new Chart(usageCtx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: chartData.timestamps || [],
+            datasets: [{
+                label: 'Power Usage (kWh)',
+                data: chartData.usage || [],
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }, {
+                label: 'Temperature (°C)',
+                data: chartData.temperature || [],
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.4,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Power Usage (kWh)'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Temperature (°C)'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            }
+        }
+    });
+    } catch (error) {
+        console.error('Error creating usage chart:', error);
+        // Show error state in chart container
+        const usageChartContainer = document.querySelector('#usageChart');
+        if (usageChartContainer && usageChartContainer.parentElement) {
+            usageChartContainer.parentElement.innerHTML = `
+                <div class="flex items-center justify-center h-64 text-red-500">
+                    <div class="text-center">
+                        <i class="fas fa-exclamation-triangle text-6xl mb-4 text-red-300"></i>
+                        <p class="text-lg font-medium text-red-400">Error creating chart</p>
+                        <p class="text-sm text-red-400 mb-4">Please try refreshing the page</p>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+// Function to create distribution chart
+function createDistributionChart() {
+    const distributionCtx = document.getElementById('distributionChart');
+    if (!distributionCtx) return;
+    
+    // Destroy existing chart if it exists
+    if (distributionChart) {
+        distributionChart.destroy();
+    }
+    
+    try {
+        // Calculate distribution data from usage data if available
+        let distributionData = [30, 50, 20]; // Default fallback
+        let distributionLabels = ['Low Usage', 'Normal Usage', 'High Usage'];
+        
+        if (chartData.usage && chartData.usage.length > 0) {
+            const usageValues = chartData.usage;
+            const avgUsage = usageValues.reduce((a, b) => a + b, 0) / usageValues.length;
+            const maxUsage = Math.max(...usageValues);
+            
+            // Define thresholds based on actual data
+            const lowThreshold = avgUsage * 0.7;
+            const highThreshold = avgUsage * 1.3;
+            
+            let lowCount = 0, normalCount = 0, highCount = 0;
+            
+            usageValues.forEach(usage => {
+                if (usage < lowThreshold) lowCount++;
+                else if (usage > highThreshold) highCount++;
+                else normalCount++;
+            });
+            
+            distributionData = [lowCount, normalCount, highCount];
+            distributionLabels = [
+                `Low (<${lowThreshold.toFixed(1)} kWh)`,
+                `Normal (${lowThreshold.toFixed(1)}-${highThreshold.toFixed(1)} kWh)`,
+                `High (>${highThreshold.toFixed(1)} kWh)`
+            ];
+        }
+        
+        distributionChart = new Chart(distributionCtx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: distributionLabels,
+            datasets: [{
+                data: distributionData,
+                backgroundColor: [
+                    '#10b981',
+                    '#3b82f6',
+                    '#ef4444'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    } catch (error) {
+        console.error('Error creating distribution chart:', error);
+        // Show error state in chart container
+        const distributionChartContainer = document.querySelector('#distributionChart');
+        if (distributionChartContainer && distributionChartContainer.parentElement) {
+            distributionChartContainer.parentElement.innerHTML = `
+                <div class="flex items-center justify-center h-64 text-red-500">
+                    <div class="text-center">
+                        <i class="fas fa-exclamation-triangle text-6xl mb-4 text-red-300"></i>
+                        <p class="text-lg font-medium text-red-400">Error creating chart</p>
+                        <p class="text-sm text-red-400 mb-4">Please try refreshing the page</p>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+// Initialize charts only if data is available
+document.addEventListener('DOMContentLoaded', function() {
+    if (chartData.timestamps && chartData.timestamps.length > 0) {
+        createUsageChart();
+        createDistributionChart();
+    }
+    
+    // Set up chart refresh functionality
+    setupChartRefresh();
+    
+    // Check if all values are zero and show help message if needed
+    checkAndShowHelpMessage();
+});
+
+// Function to check if all dashboard values are zero and show help message
+function checkAndShowHelpMessage() {
+    try {
+        // Check if all usage values are zero
+        const currentUsage = parseFloat(document.querySelector('.card .fa-bolt')?.closest('.card')?.querySelector('.text-2xl')?.textContent || '0');
+        const avgUsage = parseFloat(document.querySelector('.card .fa-chart-line')?.closest('.card')?.querySelector('.text-2xl')?.textContent || '0');
+        const totalUsage = parseFloat(document.querySelector('.card .fa-calculator')?.closest('.card')?.querySelector('.text-2xl')?.textContent || '0');
+        
+        if (currentUsage === 0 && avgUsage === 0 && totalUsage === 0) {
+            showNewUserHelpMessage();
+        }
+    } catch (error) {
+        console.log('Could not check dashboard values:', error);
+    }
+}
+
+// Function to refresh charts when new data is available
+function refreshCharts() {
+    // Fetch latest data
+    fetch('/api/debug_data')
+        .then(response => response.json())
+        .then(data => {
+            if (data.recent_7_days_count > 0) {
+                // Data is available, reload page to show charts
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error checking for new data:', error);
+        });
+}
+
+// Set up chart refresh functionality
+function setupChartRefresh() {
+    // Add refresh button to chart headers if charts exist
+    const chartHeaders = document.querySelectorAll('.card-header');
+    chartHeaders.forEach(header => {
+        const title = header.querySelector('.card-title');
+        if (title && (title.textContent.includes('Power Usage Over Time') || title.textContent.includes('Usage Distribution'))) {
+            const refreshBtn = document.createElement('button');
+            refreshBtn.className = 'btn btn-outline-primary btn-sm ml-auto';
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            refreshBtn.title = 'Refresh Chart';
+            refreshBtn.onclick = refreshCharts;
+            
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.appendChild(refreshBtn);
+        }
+    });
+}
+
+// Function to check if charts should be displayed
+function shouldShowCharts() {
+    return chartData.timestamps && chartData.timestamps.length > 0;
+}
+
+// Function to update chart data dynamically (for future use)
+function updateChartData(newData) {
+    if (newData && newData.timestamps && newData.timestamps.length > 0) {
+        // Update chart data
+        if (usageChart) {
+            usageChart.data.labels = newData.timestamps;
+            usageChart.data.datasets[0].data = newData.usage;
+            usageChart.data.datasets[1].data = newData.temperature;
+            usageChart.update();
+        }
+        
+        if (distributionChart) {
+            // Recalculate distribution
+            createDistributionChart();
+        }
+    }
+}
+
+// Generate sample data function
+function generateSampleData() {
+    // Show loading state
+    const buttons = document.querySelectorAll('button[onclick="generateSampleData()"]');
+    buttons.forEach(btn => {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+        btn.disabled = true;
+        
+        // Store original text for restoration
+        btn.dataset.originalText = originalText;
+    });
+    
+    fetch('/api/generate_sample_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            showNotification('Sample data generated successfully! Refreshing dashboard...', 'success');
+            
+            // Refresh dashboard data without page reload
+            setTimeout(() => {
+                refreshDashboardData();
+            }, 1000);
+        } else {
+            showNotification('Error generating sample data: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Error generating sample data. Please try again.', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        buttons.forEach(btn => {
+            if (btn.dataset.originalText) {
+                btn.innerHTML = btn.dataset.originalText;
+                btn.disabled = false;
+            }
+        });
+    });
+}
+
+// Notification system
+function showNotification(message, type = 'info') {
+    // Remove existing notifications
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(n => n.remove());
+    
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type} fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm`;
+    
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    
+    notification.innerHTML = `
+        <div class="flex items-center ${bgColor} text-white p-3 rounded">
+            <i class="fas fa-${icon} mr-3"></i>
+            <span class="font-medium">${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-auto text-white hover:text-gray-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Debug data function
+function debugData() {
+    fetch('/api/debug_data')
+    .then(response => response.json())
+    .then(data => {
+        console.log('Database debug info:', data);
+        let message = `Database contains ${data.total_records} total records.\n`;
+        message += `Last 7 days: ${data.recent_7_days_count} records.\n\n`;
+        message += `Data sources: ${JSON.stringify(data.source_counts, null, 2)}\n\n`;
+        message += `Most recent 3 records:\n`;
+        data.recent_data.slice(0, 3).forEach(record => {
+            message += `- ${record.timestamp}: ${record.usage} kWh (${record.data_source})\n`;
+        });
+        alert(message);
+    })
+    .catch(error => {
+        console.error('Debug error:', error);
+        alert('Error getting debug data');
+    });
+}
+
+// Clear all data function
+function clearAllData() {
+    if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+        fetch('/clear_all_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update all dashboard values to zero
+                updateDashboardValues();
+                
+                // Clear charts
+                clearCharts();
+                
+                // Show success message
+                showNotification('All data cleared successfully!', 'success');
+                
+                // Dashboard already updated, no need to reload
+                // Data will be refreshed on next visit
+            } else {
+                showNotification('Error clearing data: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Clear all data error:', error);
+            showNotification('Error clearing data', 'error');
+        });
+    }
+}
+
+// Function to update dashboard values to zero
+function updateDashboardValues() {
+    try {
+        // Update Current Usage (first card with bolt icon)
+        const currentUsageElement = document.querySelector('.card .fa-bolt')?.closest('.card')?.querySelector('.text-2xl');
+        if (currentUsageElement) {
+            currentUsageElement.textContent = '0.00 kWh';
+        }
+        
+        // Update Average Usage (second card with chart-line icon)
+        const avgUsageElement = document.querySelector('.card .fa-chart-line')?.closest('.card')?.querySelector('.text-2xl');
+        if (avgUsageElement) {
+            avgUsageElement.textContent = '0.00 kWh';
+        }
+        
+        // Update Total Usage (third card with calculator icon)
+        const totalUsageElement = document.querySelector('.card .fa-calculator')?.closest('.card')?.querySelector('.text-2xl');
+        if (totalUsageElement) {
+            totalUsageElement.textContent = '0.0 kWh';
+        }
+        
+        // Update Estimated Cost (fourth card with dollar-sign icon)
+        const costElement = document.querySelector('.card .fa-dollar-sign')?.closest('.card')?.querySelector('.text-2xl');
+        if (costElement) {
+            costElement.textContent = '$0.00';
+        }
+        
+        // Update chart data to empty
+        chartData.timestamps = [];
+        chartData.usage = [];
+        chartData.temperature = [];
+        
+        // Show the help message for new users
+        showNewUserHelpMessage();
+    } catch (error) {
+        console.log('Error updating dashboard values:', error);
+        // Fallback: try to reload the page to ensure consistency
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    }
+}
+
+// Function to clear charts
+function clearCharts() {
+    // Destroy existing charts
+    if (usageChart) {
+        usageChart.destroy();
+        usageChart = null;
+    }
+    
+    if (distributionChart) {
+        distributionChart.destroy();
+        distributionChart = null;
+    }
+    
+    // Show empty chart states
+    const usageChartContainer = document.querySelector('#usageChart');
+    const distributionChartContainer = document.querySelector('#distributionChart');
+    
+    if (usageChartContainer && usageChartContainer.parentElement) {
+        usageChartContainer.parentElement.innerHTML = `
+            <div class="flex items-center justify-center h-64 text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-chart-area text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg font-medium text-gray-400">No data available</p>
+                    <p class="text-sm text-gray-400 mb-4">All data has been cleared</p>
+                    <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-magic mr-2"></i>
+                        Generate Sample Data
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (distributionChartContainer && distributionChartContainer.parentElement) {
+        distributionChartContainer.parentElement.innerHTML = `
+            <div class="flex items-center justify-center h-64 text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-pie-chart text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg font-medium text-gray-400">No data available</p>
+                    <p class="text-sm text-gray-400 mb-4">All data has been cleared</p>
+                    <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-magic mr-2"></i>
+                        Generate Sample Data
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Clear recent activity table
+    const recentActivityBody = document.getElementById('recentActivity');
+    if (recentActivityBody) {
+        recentActivityBody.innerHTML = '';
+    }
+}
+
+// Function to show new user help message
+function showNewUserHelpMessage() {
+    // Check if help message already exists
+    let helpMessage = document.querySelector('.bg-blue-50.border.border-blue-200.rounded-lg');
+    
+    if (!helpMessage) {
+        // Create help message if it doesn't exist
+        const helpMessageHtml = `
+            <div class="mb-6">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-blue-600 text-lg"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-blue-800">Welcome to Power Forecast!</h3>
+                            <div class="mt-2 text-sm text-blue-700">
+                                <p>You're starting fresh with no power usage data. To see how the system works:</p>
+                                <ul class="mt-1 ml-4 list-disc">
+                                    <li>Click "Generate Sample Data" to create demo data</li>
+                                    <li>Upload your own CSV/Excel files with power usage data</li>
+                                    <li>Explore the forecasting and optimization features</li>
+                                </ul>
+                            </div>
+                            <div class="mt-3">
+                                <button onclick="generateSampleData()" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    <i class="fas fa-magic mr-2"></i>
+                                    Generate Sample Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert help message after the statistics cards
+        const statsSection = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-4.gap-6.mb-8');
+        if (statsSection && statsSection.parentElement) {
+            statsSection.parentElement.insertAdjacentHTML('afterend', helpMessageHtml);
+        }
+    }
+}
+
+// Function to refresh dashboard data without page reload
+function refreshDashboardData() {
+    // Show loading state
+    showNotification('Refreshing dashboard data...', 'info');
+    
+    // Fetch latest dashboard data
+    fetch('/api/dashboard_data')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update dashboard values
+                updateDashboardValuesFromAPI(data);
+                
+                // Update charts if data is available
+                if (data.chart_data && data.chart_data.timestamps && data.chart_data.timestamps.length > 0) {
+                    updateChartsFromAPI(data.chart_data);
+                } else {
+                    clearCharts();
+                }
+                
+                // Hide help message if data exists
+                hideHelpMessage();
+                
+                // Refresh recent activity
+                refreshRecentActivity();
+                
+                showNotification('Dashboard updated successfully!', 'success');
+            } else {
+                showNotification('Error refreshing dashboard: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error refreshing dashboard:', error);
+            showNotification('Error refreshing dashboard. Please try again.', 'error');
+        });
+}
+
+// Function to update dashboard values from API data
+function updateDashboardValuesFromAPI(data) {
+    try {
+        // Update Current Usage
+        const currentUsageElement = document.querySelector('.card .fa-bolt')?.closest('.card')?.querySelector('.text-2xl');
+        if (currentUsageElement && data.current_usage !== undefined) {
+            currentUsageElement.textContent = data.current_usage.toFixed(2) + ' kWh';
+        }
+        
+        // Update Average Usage
+        const avgUsageElement = document.querySelector('.card .fa-chart-line')?.closest('.card')?.querySelector('.text-2xl');
+        if (avgUsageElement && data.avg_usage !== undefined) {
+            avgUsageElement.textContent = data.avg_usage.toFixed(2) + ' kWh';
+        }
+        
+        // Update Total Usage
+        const totalUsageElement = document.querySelector('.card .fa-calculator')?.closest('.card')?.querySelector('.text-2xl');
+        if (totalUsageElement && data.total_usage !== undefined) {
+            totalUsageElement.textContent = data.total_usage.toFixed(1) + ' kWh';
+        }
+        
+        // Update Estimated Cost
+        const costElement = document.querySelector('.card .fa-dollar-sign')?.closest('.card')?.querySelector('.text-2xl');
+        if (costElement && data.total_usage !== undefined) {
+            costElement.textContent = '$' + (data.total_usage * 0.12).toFixed(2);
+        }
+        
+        // Update chart data
+        if (data.chart_data) {
+            chartData.timestamps = data.chart_data.timestamps || [];
+            chartData.usage = data.chart_data.usage || [];
+            chartData.temperature = data.chart_data.temperature || [];
+        }
+    } catch (error) {
+        console.log('Error updating dashboard values from API:', error);
+    }
+}
+
+// Function to update charts from API data
+function updateChartsFromAPI(chartData) {
+    // Clear existing charts
+    if (usageChart) {
+        usageChart.destroy();
+        usageChart = null;
+    }
+    if (distributionChart) {
+        distributionChart.destroy();
+        distributionChart = null;
+    }
+    
+    // Update global chart data
+    chartData.timestamps = chartData.timestamps || [];
+    chartData.usage = chartData.usage || [];
+    chartData.temperature = chartData.temperature || [];
+    
+    // Create new charts
+    if (chartData.timestamps.length > 0) {
+        createUsageChart();
+        createDistributionChart();
+    } else {
+        // Show empty chart states
+        showEmptyChartStates();
+    }
+}
+
+// Function to show empty chart states
+function showEmptyChartStates() {
+    const usageChartContainer = document.querySelector('#usageChart');
+    const distributionChartContainer = document.querySelector('#distributionChart');
+    
+    if (usageChartContainer && usageChartContainer.parentElement) {
+        usageChartContainer.parentElement.innerHTML = `
+            <div class="flex items-center justify-center h-64 text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-chart-area text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg font-medium text-gray-400">No data available</p>
+                    <p class="text-sm text-gray-400 mb-4">Upload data or generate sample data to see charts</p>
+                    <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-magic mr-2"></i>
+                        Generate Sample Data
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (distributionChartContainer && distributionChartContainer.parentElement) {
+        distributionChartContainer.parentElement.innerHTML = `
+            <div class="flex items-center justify-center h-64 text-gray-500">
+                <div class="text-center">
+                    <i class="fas fa-pie-chart text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg font-medium text-gray-400">No data available</p>
+                    <p class="text-sm text-gray-400 mb-4">Upload data or generate sample data to see charts</p>
+                    <button onclick="generateSampleData()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-magic mr-2"></i>
+                        Generate Sample Data
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Function to hide help message
+function hideHelpMessage() {
+    const helpMessage = document.querySelector('.bg-blue-50.border.border-blue-200.rounded-lg');
+    if (helpMessage) {
+        helpMessage.remove();
+    }
+}
+
+// Function to refresh recent activity table
+function refreshRecentActivity() {
+    fetch('/api/current_usage')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('recentActivity');
+            if (tbody) {
+                tbody.innerHTML = ''; // Clear existing data
+                
+                // Add new row
+                const row = document.createElement('tr');
+                const usage = data.usage;
+                let statusClass = 'status-normal';
+                let statusText = 'Normal';
+                
+                if (usage > 4.0) {
+                    statusClass = 'status-critical';
+                    statusText = 'High';
+                } else if (usage > 2.5) {
+                    statusClass = 'status-warning';
+                    statusText = 'Moderate';
+                }
+                
+                row.innerHTML = `
+                    <td class="text-sm text-gray-900">${new Date(data.timestamp).toLocaleString()}</td>
+                    <td class="text-sm text-gray-900">${usage.toFixed(2)} kWh</td>
+                    <td class="text-sm text-gray-900">22°C</td>
+                    <td class="text-sm text-gray-900">
+                        <span class="status-indicator ${statusClass}"></span>${statusText}
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating recent activity:', error);
+        });
+}
+
+// Handle file upload with AJAX
+function handleUpload(event) {
+    event.preventDefault();
+    console.log('Form submission intercepted by handleUpload');
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    const fileInput = document.getElementById('file');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const statusDiv = document.getElementById('uploadStatus');
+    
+    if (!fileInput.files[0]) {
+        alert('Please select a file to upload');
+        return false;
+    }
+    
+    // Show loading state
+    uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+    uploadBtn.disabled = true;
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = '<div class="alert alert-info">Uploading file...</div>';
+    
+    // Dispatch upload start event
+    document.dispatchEvent(new Event('uploadStart'));
+    
+    fetch('/upload_data', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('Upload response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Upload response data:', data);
+        if (data.success) {
+            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            // Refresh dashboard data without page reload
+            setTimeout(() => {
+                refreshDashboardData();
+            }, 1500);
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Upload error:', error);
+        statusDiv.innerHTML = '<div class="alert alert-danger">Upload failed. Please try again.</div>';
+    })
+    .finally(() => {
+        // Reset button state
+        uploadBtn.innerHTML = '<i class="fas fa-upload mr-2"></i>Upload Data';
+        uploadBtn.disabled = false;
+        
+        // Dispatch upload end event
+        document.dispatchEvent(new Event('uploadEnd'));
+    });
+    
+    return false; // Prevent form submission
+}
+
+// Also add event listener as backup
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, setting up upload form');
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        console.log('Upload form found, adding event listener');
+        uploadForm.addEventListener('submit', handleUpload);
+    } else {
+        console.error('Upload form not found');
+    }
+});
+
+// Update recent activity
+function updateRecentActivity() {
+    fetch('/api/current_usage')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('recentActivity');
+            const row = document.createElement('tr');
+            
+            const usage = data.usage;
+            let statusClass = 'status-normal';
+            let statusText = 'Normal';
+            
+            if (usage > 4.0) {
+                statusClass = 'status-critical';
+                statusText = 'High';
+            } else if (usage > 2.5) {
+                statusClass = 'status-warning';
+                statusText = 'Moderate';
+            }
+            
+            row.innerHTML = `
+                <td class="text-sm text-gray-900">${new Date(data.timestamp).toLocaleString()}</td>
+                <td class="text-sm text-gray-900">${usage.toFixed(2)} kWh</td>
+                <td class="text-sm text-gray-900">22°C</td>
+                <td class="text-sm text-gray-900">
+                    <span class="status-indicator ${statusClass}"></span>${statusText}
+                </td>
+            `;
+            
+            tbody.insertBefore(row, tbody.firstChild);
+            
+            // Keep only last 10 rows
+            while (tbody.children.length > 10) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating recent activity:', error);
+        });
+}
+
+// Update activity every 30 seconds
+setInterval(updateRecentActivity, 30000);
+
+// Initial update
+updateRecentActivity();
+</script>
+{% endblock %} 

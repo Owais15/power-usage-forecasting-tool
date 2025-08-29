@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "*.html": "jinja-html",
+        "*.py": "python"
+    },
+    "python.defaultInterpreterPath": "./venv/bin/python",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "emmet.includeLanguages": {
+        "jinja-html": "html"
+    },
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/venv": true,
+        "**/.env": true
+    }
+}

@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Power Usage Forecasting Tool{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center py-12">
+    <div>
+        <h1 class="text-5xl font-bold text-gray-900 mb-6">
+            <i class="fas fa-bolt text-blue-600 mr-4"></i>
+            Power Usage Forecasting Tool
+        </h1>
+        <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+            Intelligent power consumption analysis and forecasting to help you optimize energy usage, 
+            reduce costs, and make data-driven decisions for a more sustainable future.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4">
+            {% if session.get('user_id') %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-tachometer-alt mr-2"></i>
+                    View Dashboard
+                </a>
+                <a href="{{ url_for('forecast') }}" class="btn btn-outline-primary btn-lg">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    See Forecast
+                </a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-sign-in-alt mr-2"></i>
+                    Sign In
+                </a>
+                <a href="{{ url_for('signup') }}" class="btn btn-outline-primary btn-lg">
+                    <i class="fas fa-user-plus mr-2"></i>
+                    Create Account
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="text-center">
+        <i class="fas fa-chart-area text-blue-600 opacity-10" style="font-size: 15rem;"></i>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="py-16">
+    <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">Key Features</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Smart Forecasting -->
+        <div class="card hover-lift text-center">
+            <div class="p-8">
+                <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-chart-line text-blue-600 text-3xl"></i>
+                </div>
+                <h5 class="text-xl font-semibold text-gray-900 mb-4">Smart Forecasting</h5>
+                <p class="text-gray-600">
+                    Advanced machine learning algorithms predict your power usage patterns 
+                    with high accuracy, helping you plan ahead and optimize consumption.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Optimization Suggestions -->
+        <div class="card hover-lift text-center">
+            <div class="p-8">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-lightbulb text-green-600 text-3xl"></i>
+                </div>
+                <h5 class="text-xl font-semibold text-gray-900 mb-4">Optimization Suggestions</h5>
+                <p class="text-gray-600">
+                    Get personalized recommendations to reduce energy consumption, 
+                    lower costs, and improve efficiency based on your usage patterns.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Real-time Monitoring -->
+        <div class="card hover-lift text-center">
+            <div class="p-8">
+                <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-tachometer-alt text-purple-600 text-3xl"></i>
+                </div>
+                <h5 class="text-xl font-semibold text-gray-900 mb-4">Real-time Monitoring</h5>
+                <p class="text-gray-600">
+                    Monitor your power consumption in real-time with interactive dashboards 
+                    and detailed analytics to track your energy efficiency progress.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works Section -->
+<div class="py-16">
+    <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">How It Works</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <!-- Step 1 -->
+        <div class="text-center">
+            <div class="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                1
+            </div>
+            <h5 class="text-lg font-semibold text-gray-900 mb-2">Upload Data</h5>
+            <p class="text-gray-600">Upload your power usage data or use our sample data to get started.</p>
+        </div>
+        
+        <!-- Step 2 -->
+        <div class="text-center">
+            <div class="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                2
+            </div>
+            <h5 class="text-lg font-semibold text-gray-900 mb-2">Analyze Patterns</h5>
+            <p class="text-gray-600">Our AI analyzes your usage patterns and identifies optimization opportunities.</p>
+        </div>
+        
+        <!-- Step 3 -->
+        <div class="text-center">
+            <div class="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                3
+            </div>
+            <h5 class="text-lg font-semibold text-gray-900 mb-2">Generate Forecasts</h5>
+            <p class="text-gray-600">Get accurate predictions of future power consumption based on historical data.</p>
+        </div>
+        
+        <!-- Step 4 -->
+        <div class="text-center">
+            <div class="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                4
+            </div>
+            <h5 class="text-lg font-semibold text-gray-900 mb-2">Optimize & Save</h5>
+            <p class="text-gray-600">Implement suggested optimizations to reduce costs and improve efficiency.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Benefits Section -->
+<div class="py-16">
+    <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">Benefits</h2>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Cost Savings -->
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-dollar-sign text-green-600 text-3xl"></i>
+            </div>
+            <div class="ml-4">
+                <h5 class="text-lg font-semibold text-gray-900 mb-2">Cost Savings</h5>
+                <p class="text-gray-600">
+                    Reduce your electricity bills by identifying peak usage periods and 
+                    implementing cost-effective optimization strategies.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Environmental Impact -->
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-leaf text-green-600 text-3xl"></i>
+            </div>
+            <div class="ml-4">
+                <h5 class="text-lg font-semibold text-gray-900 mb-2">Environmental Impact</h5>
+                <p class="text-gray-600">
+                    Reduce your carbon footprint by optimizing energy consumption and 
+                    contributing to a more sustainable future.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Data-Driven Insights -->
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-chart-bar text-blue-600 text-3xl"></i>
+            </div>
+            <div class="ml-4">
+                <h5 class="text-lg font-semibold text-gray-900 mb-2">Data-Driven Insights</h5>
+                <p class="text-gray-600">
+                    Make informed decisions based on comprehensive analytics and 
+                    detailed usage pattern analysis.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Time Efficiency -->
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-clock text-yellow-600 text-3xl"></i>
+            </div>
+            <div class="ml-4">
+                <h5 class="text-lg font-semibold text-gray-900 mb-2">Time Efficiency</h5>
+                <p class="text-gray-600">
+                    Automate power usage analysis and get instant insights without 
+                    manual data processing.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call to Action -->
+<div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl p-12 text-center">
+    <h2 class="text-3xl font-bold mb-6">Ready to Optimize Your Power Usage?</h2>
+    <p class="text-xl mb-8 opacity-90">
+        Start monitoring and optimizing your energy consumption today with our 
+        intelligent forecasting tool.
+    </p>
+    {% if session.get('user_id') %}
+        <a href="{{ url_for('dashboard') }}" class="btn bg-white text-blue-600 hover:bg-gray-100 btn-lg">
+            <i class="fas fa-rocket mr-2"></i>
+            Go to Dashboard
+        </a>
+    {% else %}
+        <a href="{{ url_for('signup') }}" class="btn bg-white text-blue-600 hover:bg-gray-100 btn-lg">
+            <i class="fas fa-rocket mr-2"></i>
+            Get Started Now
+        </a>
+    {% endif %}
+</div>
+{% endblock %} 
