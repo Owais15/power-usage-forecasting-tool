@@ -1,0 +1,29 @@
+# ---- Python Cache ----
+__pycache__/
+*.pyc
+*.pyo
+
+# ---- Virtual Environment ----
+venv/
+.env
+ENV/
+
+# ---- Editor & System Files ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Local Database ----
+database/*.db
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- Test or Temporary Files ----
+*.tmp
+*.bak
+
+# ---- Uploaded Files ----
+uploads/
