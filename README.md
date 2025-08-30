@@ -33,6 +33,19 @@ A comprehensive web application for analyzing, forecasting, and optimizing power
 - Data validation and cleaning
 - Export functionality for reports
 
+### 👤 **User Management**
+- User registration and authentication
+- Profile management with usage statistics
+- Password change functionality
+- Account settings and preferences
+
+### ⚙️ **Settings & Preferences**
+- Electricity rate configuration
+- Notification preferences
+- Data retention policies
+- Peak hours and usage thresholds
+- Green energy optimization settings
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -78,6 +91,20 @@ Install these VS Code extensions for the best development experience:
 - **Python** (ms-python.python) - Python language support
 - **Jinja** (wholroyd.jinja) - Jinja2 template syntax highlighting
 - **Tailwind CSS IntelliSense** (bradlc.vscode-tailwindcss) - CSS class suggestions
+
+## 📄 Pages & Features
+
+### **Profile Page** (`/profile`)
+- **User Statistics**: Display total records, usage data, and activity metrics
+- **Account Information**: Show user details, creation date, and last login
+- **Password Management**: Secure password change functionality with validation
+- **Usage Overview**: Visual representation of user's power consumption history
+
+### **Settings Page** (`/settings`)
+- **Electricity Preferences**: Configure rates, peak hours, and usage thresholds
+- **Notification Settings**: Manage alert frequency and notification types
+- **Data Management**: Export data and configure retention policies
+- **Danger Zone**: Clear user data or delete account with confirmation
 
 ## 📁 Project Structure
 

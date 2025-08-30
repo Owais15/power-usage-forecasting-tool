@@ -15,10 +15,47 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def migrate_database():
+    """
+    Migrate existing database to new schema
+    """
+    conn = get_db_connection()
+    try:
+        # Check if settings table has the old schema (no user_id column)
+        cursor = conn.execute("PRAGMA table_info(settings)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'user_id' not in columns:
+            print("Migrating settings table to new schema...")
+            
+            # Create new settings table with correct schema
+            conn.execute('DROP TABLE IF EXISTS settings')
+            conn.execute('''
+                CREATE TABLE settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    user_id INTEGER,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    UNIQUE(key, user_id)
+                )
+            ''')
+            conn.commit()
+            print("Settings table migration completed.")
+        
+    except Exception as e:
+        print(f"Migration error: {str(e)}")
+    finally:
+        conn.close()
+
 def init_db():
     """
     Initialize the database with required tables
     """
+    # Run migration first
+    migrate_database()
+    
     conn = get_db_connection()
     
     # Create users table
@@ -53,11 +90,12 @@ def init_db():
     conn.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
+            key TEXT NOT NULL,
             value TEXT NOT NULL,
             user_id INTEGER,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(key, user_id)
         )
     ''')
     
@@ -92,23 +130,39 @@ def init_db():
         )
     ''')
     
-    # Insert default settings
+    # Note: Default settings will be created per user when they first access settings
+    # This prevents conflicts with the UNIQUE constraint on (key, user_id)
+    
+    conn.commit()
+    conn.close()
+
+def create_default_settings(user_id):
+    """
+    Create default settings for a new user
+    """
     default_settings = [
         ('electricity_rate', '0.12'),
         ('peak_hours', '18:00-22:00'),
         ('off_peak_hours', '22:00-06:00'),
         ('high_usage_threshold', '4.0'),
-        ('enable_notifications', 'false'),
-        ('data_retention_days', '365')
+        ('notifications', 'False'),
+        ('alert_frequency', 'weekly'),
+        ('green_energy', 'False')
     ]
     
-    for key, value in default_settings:
-        conn.execute('''
-            INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
-        ''', (key, value))
-    
-    conn.commit()
-    conn.close()
+    conn = get_db_connection()
+    try:
+        for key, value in default_settings:
+            conn.execute('''
+                INSERT OR IGNORE INTO settings (key, value, user_id) VALUES (?, ?, ?)
+            ''', (key, value, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error creating default settings: {str(e)}")
+        return False
+    finally:
+        conn.close()
 
 def insert_power_usage(timestamp, usage, temperature=None, humidity=None, appliance_usage=None, user_id=None):
     """

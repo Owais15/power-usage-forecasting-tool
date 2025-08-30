@@ -11,7 +11,7 @@ from models.data_processing import DataProcessor
 from models.optimization import OptimizationEngine
 from utils.database import init_db, get_db_connection
 from utils.helpers import allowed_file, generate_sample_data, detect_file_encoding
-from utils.auth import login_required, authenticate_user, create_user, logout_user, get_current_user
+from utils.auth import login_required, authenticate_user, create_user, logout_user, get_current_user, hash_password, verify_password
 from config import Config
 import math
 
@@ -124,8 +124,73 @@ def logout():
 @login_required
 def profile():
     """User profile page"""
-    user = get_current_user()
-    return render_template('profile.html', user=user)
+    try:
+        user = get_current_user()
+        
+        # Get user statistics
+        conn = get_db_connection()
+        
+        # Get total records count
+        total_records = conn.execute(
+            'SELECT COUNT(*) as count FROM power_usage WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchone()['count']
+        
+        # Get total usage
+        total_usage_result = conn.execute(
+            'SELECT SUM(usage) as total FROM power_usage WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchone()
+        total_usage = float(total_usage_result['total']) if total_usage_result['total'] else 0.0
+        
+        # Get average usage
+        avg_usage_result = conn.execute(
+            'SELECT AVG(usage) as avg_usage FROM power_usage WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchone()
+        avg_usage = float(avg_usage_result['avg_usage']) if avg_usage_result['avg_usage'] else 0.0
+        
+        # Get first and last data entry
+        first_entry = conn.execute(
+            'SELECT timestamp FROM power_usage WHERE user_id = ? ORDER BY timestamp ASC LIMIT 1',
+            (session['user_id'],)
+        ).fetchone()
+        
+        last_entry = conn.execute(
+            'SELECT timestamp FROM power_usage WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1',
+            (session['user_id'],)
+        ).fetchone()
+        
+        # Get settings count
+        settings_count = conn.execute(
+            'SELECT COUNT(*) as count FROM settings WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchone()['count']
+        
+        conn.close()
+        
+        # Calculate days since first entry
+        days_active = 0
+        if first_entry and first_entry['timestamp']:
+            from datetime import datetime
+            first_date = datetime.fromisoformat(first_entry['timestamp'].replace('Z', '+00:00'))
+            days_active = (datetime.now() - first_date).days
+        
+        user_stats = {
+            'total_records': total_records,
+            'total_usage': total_usage,
+            'avg_usage': avg_usage,
+            'days_active': days_active,
+            'settings_count': settings_count,
+            'first_entry': first_entry['timestamp'] if first_entry else None,
+            'last_entry': last_entry['timestamp'] if last_entry else None
+        }
+        
+        return render_template('profile.html', user=user, stats=user_stats)
+        
+    except Exception as e:
+        flash(f'Error loading profile: {str(e)}', 'error')
+        return render_template('profile.html', user=user, stats={})
 
 @app.route('/dashboard')
 @login_required
@@ -393,17 +458,42 @@ def upload_data():
             filename = secure_filename(file.filename)
             # Ensure upload directory exists
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            filepath = os.path.abspath(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            
+            # Debug: Print file information
+            print(f"Upload: Filename: {filename}")
+            print(f"Upload: Filepath: {filepath}")
+            print(f"Upload: Upload folder: {app.config['UPLOAD_FOLDER']}")
+            print(f"Upload: File exists before save: {os.path.exists(filepath)}")
+            
             file.save(filepath)
+            
+            # Debug: Check if file was saved
+            print(f"Upload: File exists after save: {os.path.exists(filepath)}")
+            print(f"Upload: File size: {os.path.getsize(filepath) if os.path.exists(filepath) else 'File not found'}")
+            
+            # Check file permissions
+            try:
+                import stat
+                file_stat = os.stat(filepath)
+                print(f"Upload: File permissions: {oct(file_stat.st_mode)}")
+                print(f"Upload: File is readable: {os.access(filepath, os.R_OK)}")
+                print(f"Upload: File is writable: {os.access(filepath, os.W_OK)}")
+            except Exception as perm_error:
+                print(f"Upload: Permission check error: {str(perm_error)}")
             
             # Process the uploaded data with encoding detection
             file_extension = filename.rsplit('.', 1)[1].lower()
             
             if file_extension in ['xlsx', 'xls']:
                 # Handle Excel files
+                print(f"Upload: Attempting to read Excel file: {filepath}")
+                print(f"Upload: File exists before reading: {os.path.exists(filepath)}")
                 try:
                     df = pd.read_excel(filepath)
+                    print(f"Upload: Successfully read Excel file, shape: {df.shape}")
                 except ImportError as e:
+                    print(f"Upload: ImportError: {str(e)}")
                     if 'openpyxl' in str(e):
                         return jsonify({'success': False, 'message': 'Excel file support requires openpyxl. Please run: pip install openpyxl'})
                     elif 'xlrd' in str(e):
@@ -411,28 +501,41 @@ def upload_data():
                     else:
                         return jsonify({'success': False, 'message': f'Missing Excel dependency: {str(e)}'})
                 except Exception as e:
+                    print(f"Upload: Exception reading Excel file: {str(e)}")
                     return jsonify({'success': False, 'message': f'Error reading Excel file: {str(e)}'})
             else:
                 # Handle CSV files with encoding detection
-                detected_encoding = detect_file_encoding(filepath)
+                print(f"Upload: Attempting to read CSV file: {filepath}")
+                print(f"Upload: File exists before reading: {os.path.exists(filepath)}")
                 try:
+                    detected_encoding = detect_file_encoding(filepath)
+                    print(f"Upload: Detected encoding: {detected_encoding}")
                     df = pd.read_csv(filepath, encoding=detected_encoding)
+                    print(f"Upload: Successfully read CSV file, shape: {df.shape}")
                 except Exception as e:
+                    print(f"Upload: Exception reading CSV file: {str(e)}")
                     return jsonify({'success': False, 'message': f'Error reading CSV file: {str(e)}'})
             
             # Validate and process the data
+            print(f"Upload: DataFrame columns: {df.columns.tolist()}")
+            print(f"Upload: DataFrame shape: {df.shape}")
+            print(f"Upload: DataFrame head:\n{df.head()}")
             try:
                 processed_data = data_processor.process_uploaded_data(df)
+                print(f"Upload: Successfully processed data, shape: {processed_data.shape}")
             except Exception as e:
+                print(f"Upload: Exception processing data: {str(e)}")
                 return jsonify({'success': False, 'message': f'Error processing data: {str(e)}'})
             
             # Save to database
             try:
+                print(f"Upload: Starting database save...")
                 conn = get_db_connection()
                 
                 # Select only the columns that exist in the database schema
                 db_columns = ['timestamp', 'usage', 'temperature', 'humidity', 'appliance_usage', 'data_source']
                 available_columns = [col for col in db_columns if col in processed_data.columns]
+                print(f"Upload: Available columns for database: {available_columns}")
                 
                 # Prepare data for database insertion
                 db_data = processed_data[available_columns].copy()
@@ -449,20 +552,64 @@ def upload_data():
                 print(f"Upload: Last timestamp: {db_data['timestamp'].iloc[-1]}")
                 print(f"Upload: Sample usage values: {db_data['usage'].head().tolist()}")
                 print(f"Upload: User ID: {session.get('user_id')}")
+                print(f"Upload: Database columns: {db_data.columns.tolist()}")
                 
-                db_data.to_sql('power_usage', conn, if_exists='append', index=False)
+                print(f"Upload: About to save to database, connection state: {conn}")
+                
+                # Try using raw SQL instead of to_sql to avoid potential pandas/SQLite issues
+                try:
+                    cursor = conn.cursor()
+                    
+                    # Prepare INSERT statement
+                    columns = db_data.columns.tolist()
+                    placeholders = ', '.join(['?' for _ in columns])
+                    sql = f"INSERT INTO power_usage ({', '.join(columns)}) VALUES ({placeholders})"
+                    print(f"Upload: SQL statement: {sql}")
+                    
+                    # Insert data row by row
+                    for index, row in db_data.iterrows():
+                        values = [row[col] for col in columns]
+                        cursor.execute(sql, values)
+                    
+                    print(f"Upload: Successfully inserted {len(db_data)} records using raw SQL")
+                    
+                except Exception as sql_error:
+                    print(f"Upload: Raw SQL insert failed: {str(sql_error)}")
+                    print(f"Upload: Falling back to pandas to_sql")
+                    
+                    # Fallback to pandas to_sql
+                    db_data.to_sql('power_usage', conn, if_exists='append', index=False)
+                    print(f"Upload: Successfully saved to database using pandas to_sql")
+                
+                conn.commit()
+                print(f"Upload: Database commit successful")
                 conn.close()
+                print(f"Upload: Database connection closed")
                 
                 # Clean up uploaded file
-                os.remove(filepath)
+                print(f"Upload: Cleaning up file: {filepath}")
+                print(f"Upload: File exists before cleanup: {os.path.exists(filepath)}")
+                try:
+                    os.remove(filepath)
+                    print(f"Upload: File exists after cleanup: {os.path.exists(filepath)}")
+                except Exception as cleanup_error:
+                    print(f"Upload: File cleanup error: {str(cleanup_error)}")
                 
                 return jsonify({'success': True, 'message': f'Data uploaded successfully! {len(processed_data)} records added.'})
             except Exception as e:
+                print(f"Upload: Database save exception: {str(e)}")
+                print(f"Upload: Exception type: {type(e)}")
+                import traceback
+                print(f"Upload: Traceback: {traceback.format_exc()}")
                 return jsonify({'success': False, 'message': f'Error saving to database: {str(e)}'})
         else:
             return jsonify({'success': False, 'message': 'Invalid file format. Please upload a CSV, XLSX, or XLS file.'})
     
     except Exception as e:
+        print(f"Upload: Main exception: {str(e)}")
+        print(f"Upload: Exception type: {type(e)}")
+        import traceback
+        print(f"Upload: Main traceback: {traceback.format_exc()}")
         return jsonify({'success': False, 'message': f'Error uploading data: {str(e)}'})
 
 @app.route('/api/current_usage')
@@ -692,9 +839,41 @@ def clear_all_data():
 @login_required
 def settings():
     """Settings page for user preferences"""
-    return render_template('settings.html')
+    try:
+        conn = get_db_connection()
+        
+        # Get user settings
+        settings_data = conn.execute(
+            'SELECT key, value FROM settings WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchall()
+        
+        # Convert to dictionary
+        settings = {row['key']: row['value'] for row in settings_data}
+        
+        conn.close()
+        
+        # If user has no settings, create default ones
+        if not settings:
+            from utils.database import create_default_settings
+            create_default_settings(session['user_id'])
+            
+            # Get the default settings
+            conn = get_db_connection()
+            settings_data = conn.execute(
+                'SELECT key, value FROM settings WHERE user_id = ?',
+                (session['user_id'],)
+            ).fetchall()
+            settings = {row['key']: row['value'] for row in settings_data}
+            conn.close()
+        
+        return render_template('settings.html', settings=settings)
+    except Exception as e:
+        flash(f'Error loading settings: {str(e)}', 'error')
+        return render_template('settings.html', settings={})
 
 @app.route('/update_settings', methods=['POST'])
+@login_required
 def update_settings():
     """Handle settings updates"""
     try:
@@ -702,15 +881,30 @@ def update_settings():
         electricity_rate = float(request.form.get('electricity_rate', 0.12))
         green_energy = request.form.get('green_energy') == 'on'
         notifications = request.form.get('notifications') == 'on'
+        peak_hours = request.form.get('peak_hours', '18:00-22:00')
+        high_usage_threshold = float(request.form.get('high_usage_threshold', 4.0))
+        alert_frequency = request.form.get('alert_frequency', 'weekly')
         
         # Save settings to database
         conn = get_db_connection()
-        conn.execute('''
-            INSERT OR REPLACE INTO settings (key, value) VALUES 
-            ('electricity_rate', ?),
-            ('green_energy', ?),
-            ('notifications', ?)
-        ''', (electricity_rate, green_energy, notifications))
+        
+        # Delete existing settings for this user
+        conn.execute('DELETE FROM settings WHERE user_id = ?', (session['user_id'],))
+        
+        # Insert new settings
+        settings_data = [
+            ('electricity_rate', str(electricity_rate), session['user_id']),
+            ('green_energy', str(green_energy), session['user_id']),
+            ('notifications', str(notifications), session['user_id']),
+            ('peak_hours', peak_hours, session['user_id']),
+            ('high_usage_threshold', str(high_usage_threshold), session['user_id']),
+            ('alert_frequency', alert_frequency, session['user_id'])
+        ]
+        
+        conn.executemany(
+            'INSERT INTO settings (key, value, user_id) VALUES (?, ?, ?)',
+            settings_data
+        )
         conn.commit()
         conn.close()
         
@@ -720,6 +914,143 @@ def update_settings():
         flash(f'Error updating settings: {str(e)}', 'error')
     
     return redirect(url_for('settings'))
+
+@app.route('/api/clear_user_data', methods=['POST'])
+@login_required
+def clear_user_data():
+    """Clear all data for the current user"""
+    try:
+        conn = get_db_connection()
+        
+        # Clear power usage data
+        conn.execute('DELETE FROM power_usage WHERE user_id = ?', (session['user_id'],))
+        
+        # Clear forecasts
+        conn.execute('DELETE FROM forecasts WHERE user_id = ?', (session['user_id'],))
+        
+        # Clear optimization suggestions
+        conn.execute('DELETE FROM optimization_suggestions WHERE user_id = ?', (session['user_id'],))
+        
+        # Clear settings
+        conn.execute('DELETE FROM settings WHERE user_id = ?', (session['user_id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'All user data cleared successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    """Delete the current user's account and all associated data"""
+    try:
+        conn = get_db_connection()
+        
+        # Clear all user data first
+        conn.execute('DELETE FROM power_usage WHERE user_id = ?', (session['user_id'],))
+        conn.execute('DELETE FROM forecasts WHERE user_id = ?', (session['user_id'],))
+        conn.execute('DELETE FROM optimization_suggestions WHERE user_id = ?', (session['user_id'],))
+        conn.execute('DELETE FROM settings WHERE user_id = ?', (session['user_id'],))
+        
+        # Delete the user account
+        conn.execute('DELETE FROM users WHERE id = ?', (session['user_id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        # Clear session
+        session.clear()
+        
+        return jsonify({'success': True, 'message': 'Account deleted successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/update_data_retention', methods=['POST'])
+@login_required
+def update_data_retention():
+    """Update data retention settings"""
+    try:
+        data = request.get_json()
+        retention_days = int(data.get('retention_days', 0))
+        
+        if retention_days > 0:
+            # Calculate cutoff date
+            from datetime import datetime, timedelta
+            cutoff_date = datetime.now() - timedelta(days=retention_days)
+            
+            conn = get_db_connection()
+            
+            # Delete old data
+            conn.execute(
+                'DELETE FROM power_usage WHERE user_id = ? AND timestamp < ?',
+                (session['user_id'], cutoff_date)
+            )
+            
+            conn.execute(
+                'DELETE FROM forecasts WHERE user_id = ? AND timestamp < ?',
+                (session['user_id'], cutoff_date)
+            )
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': f'Data older than {retention_days} days has been removed'})
+        else:
+            return jsonify({'success': True, 'message': 'All data will be retained'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/update_profile', methods=['POST'])
+@login_required
+def update_profile():
+    """Update user profile information"""
+    try:
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if new_password:
+            # Verify current password
+            conn = get_db_connection()
+            user = conn.execute(
+                'SELECT password_hash FROM users WHERE id = ?',
+                (session['user_id'],)
+            ).fetchone()
+            
+            if not user or not verify_password(current_password, user['password_hash']):
+                flash('Current password is incorrect.', 'error')
+                return redirect(url_for('profile'))
+            
+            if new_password != confirm_password:
+                flash('New passwords do not match.', 'error')
+                return redirect(url_for('profile'))
+            
+            if len(new_password) < 6:
+                flash('New password must be at least 6 characters long.', 'error')
+                return redirect(url_for('profile'))
+            
+            # Update password
+            hashed_password = hash_password(new_password)
+            conn.execute(
+                'UPDATE users SET password_hash = ? WHERE id = ?',
+                (hashed_password, session['user_id'])
+            )
+            conn.commit()
+            conn.close()
+            
+            flash('Password updated successfully!', 'success')
+        else:
+            flash('No changes made.', 'info')
+    
+    except Exception as e:
+        flash(f'Error updating profile: {str(e)}', 'error')
+    
+    return redirect(url_for('profile'))
 
 @app.errorhandler(404)
 def not_found_error(error):

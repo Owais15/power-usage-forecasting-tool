@@ -35,10 +35,16 @@ def create_user(username, email, password):
         
         # Create new user
         hashed_password = hash_password(password)
-        conn.execute(
+        cursor = conn.execute(
             'INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)',
             (username, email, hashed_password, datetime.now())
         )
+        user_id = cursor.lastrowid
+        
+        # Create default settings for the new user
+        from utils.database import create_default_settings
+        create_default_settings(user_id)
+        
         conn.commit()
         return True, "User created successfully"
     except Exception as e:

@@ -215,6 +215,16 @@ def detect_file_encoding(filepath):
     """
     Detect the encoding of a file using common encodings
     """
+    # Check if file is a text file (not binary like Excel)
+    if not os.path.exists(filepath):
+        return 'utf-8'
+    
+    # Check file extension to avoid processing binary files
+    file_extension = filepath.lower().split('.')[-1] if '.' in filepath else ''
+    if file_extension in ['xlsx', 'xls', 'xlsm', 'xlsb']:
+        print(f"Warning: detect_file_encoding called on Excel file: {filepath}")
+        return 'utf-8'  # Default for Excel files
+    
     encodings = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252']
     
     for encoding in encodings:
@@ -223,6 +233,9 @@ def detect_file_encoding(filepath):
                 f.read()
             return encoding
         except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            print(f"Error reading file {filepath} with encoding {encoding}: {str(e)}")
             continue
     
     return 'utf-8'  # Default fallback
