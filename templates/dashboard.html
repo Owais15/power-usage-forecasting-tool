@@ -320,9 +320,9 @@
                     <i class="fas fa-database mr-2"></i>
                     Generate Sample Data
                 </button>
-                <button class="btn btn-outline-info w-full" onclick="debugData()">
+                <button class="btn btn-outline-info w-full" onclick="debugUserData()">
                     <i class="fas fa-bug mr-2"></i>
-                    Debug Data
+                    Debug User Data
                 </button>
                 <button class="btn btn-outline-danger w-full" onclick="clearAllData()">
                     <i class="fas fa-trash-alt mr-2"></i>
@@ -733,24 +733,31 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Debug data function
-function debugData() {
-    fetch('/api/debug_data')
+// Debug user data function
+function debugUserData() {
+    fetch('/api/debug_user_data')
     .then(response => response.json())
     .then(data => {
-        console.log('Database debug info:', data);
-        let message = `Database contains ${data.total_records} total records.\n`;
-        message += `Last 7 days: ${data.recent_7_days_count} records.\n\n`;
+        console.log('User database debug info:', data);
+        let message = `User ID: ${data.user_id}\n`;
+        message += `Total records for user: ${data.total_records}\n`;
+        message += `Last 7 days: ${data.recent_7_days_count} records\n`;
+        message += `Dashboard data count: ${data.dashboard_data_count}\n\n`;
         message += `Data sources: ${JSON.stringify(data.source_counts, null, 2)}\n\n`;
+        message += `Seven days ago: ${data.seven_days_ago}\n\n`;
         message += `Most recent 3 records:\n`;
         data.recent_data.slice(0, 3).forEach(record => {
+            message += `- ${record.timestamp}: ${record.usage} kWh (${record.data_source})\n`;
+        });
+        message += `\nDashboard query data (first 3):\n`;
+        data.dashboard_data.slice(0, 3).forEach(record => {
             message += `- ${record.timestamp}: ${record.usage} kWh (${record.data_source})\n`;
         });
         alert(message);
     })
     .catch(error => {
-        console.error('Debug error:', error);
-        alert('Error getting debug data');
+        console.error('Debug user data error:', error);
+        alert('Error getting user debug data');
     });
 }
 
@@ -936,18 +943,26 @@ function refreshDashboardData() {
     // Show loading state
     showNotification('Refreshing dashboard data...', 'info');
     
+    console.log('Refreshing dashboard data...');
+    
     // Fetch latest dashboard data
     fetch('/api/dashboard_data')
-        .then(response => response.json())
+        .then(response => {
+            console.log('Dashboard data response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Dashboard data response:', data);
             if (data.success) {
                 // Update dashboard values
                 updateDashboardValuesFromAPI(data);
                 
                 // Update charts if data is available
                 if (data.chart_data && data.chart_data.timestamps && data.chart_data.timestamps.length > 0) {
+                    console.log('Updating charts with data:', data.chart_data);
                     updateChartsFromAPI(data.chart_data);
                 } else {
+                    console.log('No chart data available, clearing charts');
                     clearCharts();
                 }
                 
@@ -959,6 +974,7 @@ function refreshDashboardData() {
                 
                 showNotification('Dashboard updated successfully!', 'success');
             } else {
+                console.error('Dashboard refresh failed:', data.message);
                 showNotification('Error refreshing dashboard: ' + data.message, 'error');
             }
         })
@@ -1159,7 +1175,12 @@ function handleUpload(event) {
             // Refresh dashboard data without page reload
             setTimeout(() => {
                 refreshDashboardData();
-            }, 1500);
+            }, 1000);
+            
+            // Also refresh after a longer delay to ensure data is fully processed
+            setTimeout(() => {
+                refreshDashboardData();
+            }, 3000);
         } else {
             statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
         }

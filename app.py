@@ -209,7 +209,8 @@ def dashboard():
             conn, params=[seven_days_ago, session['user_id']]
         )
         
-        print(f"Dashboard: Querying data from {seven_days_ago} onwards")
+        print(f"Dashboard: Querying data from {seven_days_ago} onwards for user {session['user_id']}")
+        print(f"Dashboard: Found {len(recent_data)} records in database")
         
         # Convert timestamp strings back to datetime for processing
         if len(recent_data) > 0 and 'timestamp' in recent_data.columns:
@@ -217,7 +218,6 @@ def dashboard():
         
         # Get current statistics
         if len(recent_data) > 0:
-            print(f"Dashboard: Found {len(recent_data)} records in database")
             print(f"Dashboard: Latest timestamp: {recent_data.iloc[0]['timestamp']}")
             print(f"Dashboard: Earliest timestamp: {recent_data.iloc[-1]['timestamp']}")
             
@@ -239,6 +239,7 @@ def dashboard():
             }
         else:
             # New user or no data - start with zeros
+            print(f"Dashboard: No data found for user {session['user_id']}")
             current_usage = 0.0
             avg_usage = 0.0
             total_usage = 0.0
@@ -257,6 +258,7 @@ def dashboard():
                              chart_data=chart_data)
     
     except Exception as e:
+        print(f"Dashboard error: {str(e)}")
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('dashboard.html', 
                              current_usage=0,
@@ -465,6 +467,7 @@ def upload_data():
             print(f"Upload: Filepath: {filepath}")
             print(f"Upload: Upload folder: {app.config['UPLOAD_FOLDER']}")
             print(f"Upload: File exists before save: {os.path.exists(filepath)}")
+            print(f"Upload: User ID: {session.get('user_id')}")
             
             file.save(filepath)
             
@@ -583,6 +586,26 @@ def upload_data():
                 
                 conn.commit()
                 print(f"Upload: Database commit successful")
+                
+                # Verify data was saved correctly
+                try:
+                    # Check if data was actually saved
+                    verification_query = "SELECT COUNT(*) as count FROM power_usage WHERE user_id = ? AND data_source = 'uploaded'"
+                    verification_result = conn.execute(verification_query, (session.get('user_id'),)).fetchone()
+                    print(f"Upload: Verification - Found {verification_result['count']} uploaded records for user {session.get('user_id')}")
+                    
+                    # Check recent data
+                    recent_query = "SELECT * FROM power_usage WHERE user_id = ? ORDER BY timestamp DESC LIMIT 5"
+                    recent_data = pd.read_sql_query(recent_query, conn, params=[session.get('user_id')])
+                    print(f"Upload: Recent data for user: {len(recent_data)} records")
+                    if len(recent_data) > 0:
+                        print(f"Upload: Most recent timestamp: {recent_data.iloc[0]['timestamp']}")
+                        print(f"Upload: Most recent usage: {recent_data.iloc[0]['usage']}")
+                        print(f"Upload: Most recent data source: {recent_data.iloc[0]['data_source']}")
+                    
+                except Exception as verify_error:
+                    print(f"Upload: Verification error: {str(verify_error)}")
+                
                 conn.close()
                 print(f"Upload: Database connection closed")
                 
@@ -819,6 +842,58 @@ def api_debug_data():
             'source_counts': source_counts.to_dict('records') if len(source_counts) > 0 else [],
             'recent_7_days_count': len(recent_7_days),
             'recent_7_days_data': recent_7_days.to_dict('records') if len(recent_7_days) > 0 else []
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug_user_data')
+@login_required
+def api_debug_user_data():
+    """API endpoint to debug user-specific database contents"""
+    try:
+        conn = get_db_connection()
+        
+        # Get total count for this user
+        total_count = conn.execute("SELECT COUNT(*) FROM power_usage WHERE user_id = ?", (session['user_id'],)).fetchone()[0]
+        
+        # Get recent data for this user
+        recent_data = pd.read_sql_query(
+            "SELECT * FROM power_usage WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10", 
+            conn, params=[session['user_id']]
+        )
+        
+        # Get data by source for this user
+        source_counts = pd.read_sql_query(
+            "SELECT data_source, COUNT(*) as count FROM power_usage WHERE user_id = ? GROUP BY data_source", 
+            conn, params=[session['user_id']]
+        )
+        
+        # Get data from last 7 days for this user
+        from datetime import datetime, timedelta
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_7_days = pd.read_sql_query(
+            "SELECT * FROM power_usage WHERE timestamp >= ? AND user_id = ? ORDER BY timestamp DESC", 
+            conn, params=[seven_days_ago, session['user_id']]
+        )
+        
+        # Get dashboard query data (same as dashboard route)
+        dashboard_data = pd.read_sql_query(
+            "SELECT * FROM power_usage WHERE timestamp >= ? AND user_id = ? ORDER BY timestamp DESC", 
+            conn, params=[seven_days_ago, session['user_id']]
+        )
+        
+        conn.close()
+        
+        return jsonify({
+            'user_id': session['user_id'],
+            'total_records': total_count,
+            'recent_data': recent_data.to_dict('records') if len(recent_data) > 0 else [],
+            'source_counts': source_counts.to_dict('records') if len(source_counts) > 0 else [],
+            'recent_7_days_count': len(recent_7_days),
+            'recent_7_days_data': recent_7_days.to_dict('records') if len(recent_7_days) > 0 else [],
+            'dashboard_data_count': len(dashboard_data),
+            'dashboard_data': dashboard_data.to_dict('records') if len(dashboard_data) > 0 else [],
+            'seven_days_ago': seven_days_ago.isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
